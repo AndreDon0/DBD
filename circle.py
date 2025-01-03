@@ -46,7 +46,10 @@ class Circle:
         for i in range(0, self.size):
             phi = self.from_size_to_phi(i)
             y, x = self.coordinate(phi)
-            self.circle[i] = image[y, x]
+            try:
+                self.circle[i] = image[y, x]
+            except IndexError:
+                self.circle[i] = 0
 
     # Вывод индексов подходящих участков
     @staticmethod
@@ -138,7 +141,7 @@ class DbDCircle:
         # Создание разный видов картинки
         self.image = image
         self.grey_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        self.object_img = self.create_obg_image(image)
+        self.object_img = self.create_obj_image(image)
 
         # Задание математических параметров
         self.center, self.radius = self.calc_cen_rad_circle(self.grey_img)
@@ -160,44 +163,44 @@ class DbDCircle:
 
     # Создание картинки на которой объект четко выделен
     @staticmethod
-    def create_obg_image(image: np.ndarray) -> np.ndarray:
+    def create_obj_image(image: np.ndarray) -> np.ndarray:
         b, g, r = cv2.split(image)
         return np.array(r, np.int16) - np.array(g, np.int16) - np.array(b, np.int16)
 
     # Поиск минимального времени для пересечения указателя и окрестности
     @staticmethod
-    def find_time_to_areas(areas: list, om: float) -> float:
+    def find_time_to_areas(areas: list, phi: float, om: float) -> float:
         min_time = inf
         for area in areas:
-            p1 = (area[1] - area[0]) / 2
+            p1 = (area[1] + area[0]) / 2
             p2 = p1 - 2 * pi
-            t1 = p1 / om
-            t2 = p2 / om
-            tm = min(t1, t2)
-            if min_time < tm:
-                min_time = tm
+            t1 = (p1 - phi) / om
+            t2 = (p2 - phi) / om
+            if min_time > t1 > 0:
+                min_time = t1
+            if min_time > t2 > 0:
+                min_time = t2
 
         return min_time
 
     def calc_time(self, new_image: np.ndarray, t: float) -> float:
-        b, g, r = cv2.split(new_image)
-        new_object_img = (np.array(r, np.int16) - np.array(g, np.int16) - np.array(b, np.int16))
+        new_object_img = self.create_obj_image(new_image)
         new_object_circle = Circle(self.center, self.radius, t, self.size)
         new_object_circle.circling_image(new_object_img)
-        new_object_position = new_object_circle.more_then(RED)
+        new_object_position = new_object_circle.more_then(RED, cor_len=0)
 
-        phi0 = self.object_position[0][1] - self.object_position[0][0]
-        phi1 = new_object_position[0][1] - new_object_position[0][0]
+        phi0 = (self.object_position[0][1] + self.object_position[0][0]) / 2
+        phi1 = (new_object_position[0][1] + new_object_position[0][0]) / 2
         time0 = self.object_circle.t
         time1 = t
         om = (phi1 - phi0) / (time1 - time0)
 
         if not self.excellent_position == []:
-            return self.find_time_to_areas(self.excellent_position, om)
+            return self.find_time_to_areas(self.excellent_position, phi1, om)
         elif not self.good_position == []:
-            return self.find_time_to_areas(self.good_position, om)
+            return self.find_time_to_areas(self.good_position, phi1, om)
         else:
-            raise ValueError("Не найдено ни хорошей ни отличной позиции")
+            raise ValueError("Не найдено ни хорошей, ни отличной позиции")
 
     # Проверка круга на то что бы он был из дбд
     def check_dbd_circle(self) -> bool:
@@ -210,6 +213,15 @@ class DbDCircle:
 
     # Вывод рисунка с помеченной окружностью
     def get_image_circle(self) -> np.ndarray:
+        mod_img = self.image
+        for i in range(0, self.grey_circle.size):
+            phi = self.grey_circle.from_size_to_phi(i)
+            y, x = self.grey_circle.coordinate(phi)
+            mod_img[y, x] = 255
+        return mod_img
+
+    # Вывод рисунка с помеченной окружностью
+    def get_solution_circle(self) -> np.ndarray:
         mod_img = self.image
         for i in range(0, self.grey_circle.size):
             phi = self.grey_circle.from_size_to_phi(i)

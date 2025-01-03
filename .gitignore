@@ -1,6 +1,8 @@
 .venv/
 Screenshots/
+.idea/
 
+# My test files
 test.py
 Record.py
 Finding.py
